@@ -59,6 +59,18 @@ func (e *EpsilonGreedy) Counts() sam.SliceInt {
 	return s
 }
 
+// Extend --
+func (e *EpsilonGreedy) Extend(n int) {
+	e.Lock()
+	defer e.Unlock()
+
+	i := make([]int, n, n)
+	f := make([]float64, n, n)
+
+	e.c = append(e.c, i...)
+	e.r = append(e.r, f...)
+}
+
 // Remove --
 func (e *EpsilonGreedy) Remove(option int) {
 	if option < 0 || option > len(e.c)-1 {

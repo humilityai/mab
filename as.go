@@ -51,6 +51,18 @@ func (a *AnnealingSoftmax) Counts() sam.SliceInt {
 	return s
 }
 
+// Extend --
+func (a *AnnealingSoftmax) Extend(n int) {
+	a.Lock()
+	defer a.Unlock()
+
+	i := make([]int, n, n)
+	f := make([]float64, n, n)
+
+	a.c = append(a.c, i...)
+	a.r = append(a.r, f...)
+}
+
 // Remove --
 func (a *AnnealingSoftmax) Remove(option int) {
 	if option < 0 || option > len(a.c)-1 {

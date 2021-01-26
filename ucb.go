@@ -50,6 +50,18 @@ func (u *UpperConfidenceBound) Counts() sam.SliceInt {
 	return s
 }
 
+// Extend --
+func (u *UpperConfidenceBound) Extend(n int) {
+	u.Lock()
+	defer u.Unlock()
+
+	i := make([]int, n, n)
+	f := make([]float64, n, n)
+
+	u.c = append(u.c, i...)
+	u.r = append(u.r, f...)
+}
+
 // Remove --
 func (u *UpperConfidenceBound) Remove(option int) {
 	if option < 0 || option > len(u.c)-1 {

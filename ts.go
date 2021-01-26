@@ -50,8 +50,23 @@ func (t *ThompsonSampling) Counts() sam.SliceInt {
 	return s
 }
 
+// Extend --
+func (t *ThompsonSampling) Extend(n int) {
+	t.Lock()
+	defer t.Unlock()
+
+	i := make([]int, n, n)
+	f := make([]float64, n, n)
+
+	t.c = append(t.c, i...)
+	t.r = append(t.r, f...)
+}
+
 // Remove --
 func (t *ThompsonSampling) Remove(option int) {
+	t.Lock()
+	defer t.Unlock()
+
 	if option < 0 || option > len(t.c)-1 {
 		return
 	}
