@@ -23,9 +23,9 @@ import (
 // EpsilonGreedy is the simplest, easiest, and most "good-enough"
 // multi-armed bandit optimizer to utilize.
 type EpsilonGreedy struct {
-	Epsilon float64
-	C       sam.SliceInt
-	R       sam.SliceFloat64
+	epsilon float64
+	c       sam.SliceInt
+	r       sam.SliceFloat64
 
 	sync.RWMutex
 }
@@ -43,31 +43,69 @@ func NewEpsilonGreedy(options int, epsilon float64) (Optimizer, error) {
 	}
 
 	return &EpsilonGreedy{
-		Epsilon: epsilon,
-		C:       make(sam.SliceInt, options),
-		R:       make(sam.SliceFloat64, options),
+		epsilon: epsilon,
+		c:       make(sam.SliceInt, options),
+		r:       make(sam.SliceFloat64, options),
 	}, nil
 }
 
-// Select will select an option randomly.
-func (g *EpsilonGreedy) Select() int {
-	g.Lock()
-	defer g.Unlock()
+// Counts returns a copy of the counts slice
+func (e *EpsilonGreedy) Counts() sam.SliceInt {
+	e.Lock()
+	defer e.Unlock()
 
-	if rand.Float64() > g.Epsilon {
-		return g.R.MaxIndex()
+	s := make(sam.SliceInt, len(e.c))
+	copy(s, e.c)
+	return s
+}
+
+// Remove --
+func (e *EpsilonGreedy) Remove(option int) {
+	if option < 0 || option > len(e.c)-1 {
+		return
 	}
 
-	return rand.Intn(len(g.R))
+	e.c[option] = -1
+	e.r[option] = -1.0
+}
+
+// Rewards returns a copy of the rewards slice
+func (e *EpsilonGreedy) Rewards() sam.SliceFloat64 {
+	e.Lock()
+	defer e.Unlock()
+
+	s := make(sam.SliceFloat64, len(e.r))
+	copy(s, e.r)
+	return s
+}
+
+// Select will select an option randomly.
+func (e *EpsilonGreedy) Select() int {
+	e.Lock()
+	defer e.Unlock()
+
+	if rand.Float64() > e.epsilon {
+		return e.r.MaxIndex()
+	}
+
+	return e.randSelect()
+}
+
+func (e *EpsilonGreedy) randSelect() int {
+	res := rand.Intn(len(e.r))
+	if res < 0 {
+		return e.randSelect()
+	}
+	return res
 }
 
 // Update should be used to increment the given option with
 // the given reward amount.
-func (g *EpsilonGreedy) Update(option int, reward float64) error {
-	g.Lock()
-	defer g.Unlock()
+func (e *EpsilonGreedy) Update(option int, reward float64) error {
+	e.Lock()
+	defer e.Unlock()
 
-	if option < 0 || option > len(g.R) {
+	if option < 0 || option > len(e.r) {
 		return ErrIndex
 	}
 
@@ -75,32 +113,13 @@ func (g *EpsilonGreedy) Update(option int, reward float64) error {
 		return ErrReward
 	}
 
-	// update count
-	g.C[option]++
+	// check if removed
+	if e.c[option] < 0 {
+		return nil
+	}
 
-	// update reward
-	n := float64(g.C[option])
-	g.R[option] = (g.R[option]*(n-1) + reward) / n
+	e.c[option]++
+	e.r[option] += reward
 
 	return nil
-}
-
-// Counts returns a copy of the counts slice
-func (g *EpsilonGreedy) Counts() sam.SliceInt {
-	g.Lock()
-	defer g.Unlock()
-
-	s := make(sam.SliceInt, len(g.C))
-	copy(s, g.C)
-	return s
-}
-
-// Rewards returns a copy of the rewards slice
-func (g *EpsilonGreedy) Rewards() sam.SliceFloat64 {
-	g.Lock()
-	defer g.Unlock()
-
-	s := make(sam.SliceFloat64, len(g.R))
-	copy(s, g.R)
-	return s
 }

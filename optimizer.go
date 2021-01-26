@@ -20,6 +20,7 @@ import "github.com/humilityai/sam"
 type Optimizer interface {
 	Select() int
 	Update(selection int, reward float64) error
+	Remove(int)
 	Counts() sam.SliceInt
 	Rewards() sam.SliceFloat64
 }

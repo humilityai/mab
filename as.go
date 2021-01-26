@@ -23,8 +23,8 @@ import (
 
 // AnnealingSoftmax ...
 type AnnealingSoftmax struct {
-	C sam.SliceInt
-	R sam.SliceFloat64
+	c sam.SliceInt
+	r sam.SliceFloat64
 
 	sync.RWMutex
 }
@@ -36,9 +36,39 @@ func NewAnnealingSoftmax(options int) (Optimizer, error) {
 	}
 
 	return &AnnealingSoftmax{
-		C: make(sam.SliceInt, options),
-		R: make(sam.SliceFloat64, options),
+		c: make(sam.SliceInt, options),
+		r: make(sam.SliceFloat64, options),
 	}, nil
+}
+
+// Counts returns a copy of the counts slice
+func (a *AnnealingSoftmax) Counts() sam.SliceInt {
+	a.Lock()
+	defer a.Unlock()
+
+	s := make(sam.SliceInt, len(a.c))
+	copy(s, a.c)
+	return s
+}
+
+// Remove --
+func (a *AnnealingSoftmax) Remove(option int) {
+	if option < 0 || option > len(a.c)-1 {
+		return
+	}
+
+	a.c[option] = -1
+	a.r[option] = 0
+}
+
+// Rewards returns a copy of the rewards slice
+func (a *AnnealingSoftmax) Rewards() sam.SliceFloat64 {
+	a.Lock()
+	defer a.Unlock()
+
+	s := make(sam.SliceFloat64, len(a.r))
+	copy(s, a.r)
+	return s
 }
 
 // Select ...
@@ -46,15 +76,17 @@ func (a *AnnealingSoftmax) Select() int {
 	a.Lock()
 	defer a.Unlock()
 
-	temp := 1.0 / math.Log(float64(a.C.Sum())+1e-7)
+	temp := 1.0 / math.Log(float64(a.c.Sum())+1e-7)
 
 	var z float64
-	for _, reward := range a.R {
-		z += math.Exp(reward / temp)
+	for i, reward := range a.r {
+		if a.c[i] >= 0 {
+			z += math.Exp(reward / temp)
+		}
 	}
 
-	probs := make(sam.SliceFloat64, len(a.R))
-	for i, reward := range a.R {
+	probs := make(sam.SliceFloat64, len(a.r))
+	for i, reward := range a.r {
 		probs[i] = math.Exp(reward/temp) / z
 	}
 
@@ -67,7 +99,7 @@ func (a *AnnealingSoftmax) Update(option int, reward float64) error {
 	a.Lock()
 	defer a.Unlock()
 
-	if option < 0 || option > len(a.R) {
+	if option < 0 || option > len(a.r) {
 		return ErrIndex
 	}
 
@@ -75,32 +107,8 @@ func (a *AnnealingSoftmax) Update(option int, reward float64) error {
 		return ErrReward
 	}
 
-	// update count
-	a.C[option]++
-
-	// update reward
-	n := float64(a.C[option])
-	a.R[option] = (a.R[option]*(n-1) + reward) / n
+	a.c[option]++
+	a.r[option] += reward
 
 	return nil
-}
-
-// Counts returns a copy of the counts slice
-func (a *AnnealingSoftmax) Counts() sam.SliceInt {
-	a.Lock()
-	defer a.Unlock()
-
-	s := make(sam.SliceInt, len(a.C))
-	copy(s, a.C)
-	return s
-}
-
-// Rewards returns a copy of the rewards slice
-func (a *AnnealingSoftmax) Rewards() sam.SliceFloat64 {
-	a.Lock()
-	defer a.Unlock()
-
-	s := make(sam.SliceFloat64, len(a.R))
-	copy(s, a.R)
-	return s
 }

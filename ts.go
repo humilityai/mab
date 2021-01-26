@@ -22,8 +22,8 @@ import (
 
 // ThompsonSampling ...
 type ThompsonSampling struct {
-	C sam.SliceInt
-	R sam.SliceFloat64
+	c sam.SliceInt
+	r sam.SliceFloat64
 
 	sync.RWMutex
 }
@@ -35,9 +35,38 @@ func NewThompsonSampling(options int) (Optimizer, error) {
 	}
 
 	return &ThompsonSampling{
-		C: make(sam.SliceInt, options),
-		R: make(sam.SliceFloat64, options),
+		c: make(sam.SliceInt, options),
+		r: make(sam.SliceFloat64, options),
 	}, nil
+}
+
+// Counts returns a copy of the counts slice
+func (t *ThompsonSampling) Counts() sam.SliceInt {
+	t.Lock()
+	defer t.Unlock()
+
+	s := make(sam.SliceInt, len(t.c))
+	copy(s, t.c)
+	return s
+}
+
+// Remove --
+func (t *ThompsonSampling) Remove(option int) {
+	if option < 0 || option > len(t.c)-1 {
+		return
+	}
+
+	t.c[option] = -1
+}
+
+// Rewards returns a copy of the rewards slice
+func (t *ThompsonSampling) Rewards() sam.SliceFloat64 {
+	t.Lock()
+	defer t.Unlock()
+
+	s := make(sam.SliceFloat64, len(t.r))
+	copy(s, t.r)
+	return s
 }
 
 // Select ...
@@ -45,13 +74,32 @@ func (t *ThompsonSampling) Select() int {
 	t.Lock()
 	defer t.Unlock()
 
-	scores := make(sam.SliceFloat64, len(t.C))
-	for i, count := range t.C {
-		d := distuv.Beta{
-			Alpha: float64(count + 1),
-			Beta:  float64(t.C.Sum() - count + 1),
+	scores := make(sam.SliceFloat64, len(t.c))
+
+	if t.r.IsZeroed() {
+		for i, count := range t.c {
+			if count < 0 {
+				scores[i] = -1.0
+			}
+
+			d := distuv.Beta{
+				Alpha: float64(count + 1.0),
+				Beta:  float64(t.c.Sum() + 1),
+			}
+			scores[i] = d.Rand()
 		}
-		scores[i] = d.Rand()
+	} else {
+		for i, count := range t.c {
+			if count < 0 {
+				scores[i] = -1.0
+			}
+
+			d := distuv.Beta{
+				Alpha: t.r[i] + 1.0,
+				Beta:  float64(t.r.Sum() + 1),
+			}
+			scores[i] = d.Rand()
+		}
 	}
 
 	return scores.MaxIndex()
@@ -63,7 +111,7 @@ func (t *ThompsonSampling) Update(option int, reward float64) error {
 	t.Lock()
 	defer t.Unlock()
 
-	if option < 0 || option > len(t.R) {
+	if option < 0 || option > len(t.r) {
 		return ErrIndex
 	}
 
@@ -71,32 +119,13 @@ func (t *ThompsonSampling) Update(option int, reward float64) error {
 		return ErrReward
 	}
 
-	// update count
-	t.C[option]++
+	// check if removed
+	if t.c[option] < 0 {
+		return nil
+	}
 
-	// update reward
-	n := float64(t.C[option])
-	t.R[option] = (t.R[option]*(n-1) + reward) / n
+	t.c[option]++
+	t.r[option] += reward
 
 	return nil
-}
-
-// Counts returns a copy of the counts slice
-func (t *ThompsonSampling) Counts() sam.SliceInt {
-	t.Lock()
-	defer t.Unlock()
-
-	s := make(sam.SliceInt, len(t.C))
-	copy(s, t.C)
-	return s
-}
-
-// Rewards returns a copy of the rewards slice
-func (t *ThompsonSampling) Rewards() sam.SliceFloat64 {
-	t.Lock()
-	defer t.Unlock()
-
-	s := make(sam.SliceFloat64, len(t.R))
-	copy(s, t.R)
-	return s
 }

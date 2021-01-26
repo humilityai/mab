@@ -22,8 +22,8 @@ import (
 
 // UpperConfidenceBound ...
 type UpperConfidenceBound struct {
-	C sam.SliceInt
-	R sam.SliceFloat64
+	c sam.SliceInt
+	r sam.SliceFloat64
 
 	sync.RWMutex
 }
@@ -35,9 +35,38 @@ func NewUpperConfidenceBound(options int) (Optimizer, error) {
 	}
 
 	return &UpperConfidenceBound{
-		C: make(sam.SliceInt, options),
-		R: make(sam.SliceFloat64, options),
+		c: make(sam.SliceInt, options),
+		r: make(sam.SliceFloat64, options),
 	}, nil
+}
+
+// Counts returns a copy of the counts slice
+func (u *UpperConfidenceBound) Counts() sam.SliceInt {
+	u.Lock()
+	defer u.Unlock()
+
+	s := make(sam.SliceInt, len(u.c))
+	copy(s, u.c)
+	return s
+}
+
+// Remove --
+func (u *UpperConfidenceBound) Remove(option int) {
+	if option < 0 || option > len(u.c)-1 {
+		return
+	}
+
+	u.c[option] = -1
+}
+
+// Rewards returns a copy of the rewards slice
+func (u *UpperConfidenceBound) Rewards() sam.SliceFloat64 {
+	u.Lock()
+	defer u.Unlock()
+
+	s := make(sam.SliceFloat64, len(u.r))
+	copy(s, u.r)
+	return s
 }
 
 // Select ...
@@ -45,15 +74,19 @@ func (u *UpperConfidenceBound) Select() int {
 	u.Lock()
 	defer u.Unlock()
 
-	bonused := make(sam.SliceFloat64, len(u.R))
+	bonused := make(sam.SliceFloat64, len(u.r))
+	for i, count := range u.c {
+		if count < 0 {
+			bonused[i] = -1.0
+			continue
+		}
 
-	for i, count := range u.C {
 		if count == 0 {
 			return i
 		}
 
-		b := math.Sqrt(2 * math.Log(float64(u.C.Sum())/float64(count)))
-		bonused[i] = u.R[i] + b
+		b := math.Sqrt(2 * math.Log(float64(u.c.Sum())/float64(count)))
+		bonused[i] = u.r[i] + b
 	}
 
 	return bonused.MaxIndex()
@@ -65,7 +98,7 @@ func (u *UpperConfidenceBound) Update(option int, reward float64) error {
 	u.Lock()
 	defer u.Unlock()
 
-	if option < 0 || option > len(u.R) {
+	if option < 0 || option > len(u.r) {
 		return ErrIndex
 	}
 
@@ -73,32 +106,13 @@ func (u *UpperConfidenceBound) Update(option int, reward float64) error {
 		return ErrReward
 	}
 
-	// update count
-	u.C[option]++
+	// check if removed
+	if u.c[option] < 0 {
+		return nil
+	}
 
-	// update reward
-	n := float64(u.C[option])
-	u.R[option] = (u.R[option]*(n-1) + reward) / n
+	u.c[option]++
+	u.r[option] += reward
 
 	return nil
-}
-
-// Counts returns a copy of the counts slice
-func (u *UpperConfidenceBound) Counts() sam.SliceInt {
-	u.Lock()
-	defer u.Unlock()
-
-	s := make(sam.SliceInt, len(u.C))
-	copy(s, u.C)
-	return s
-}
-
-// Rewards returns a copy of the rewards slice
-func (u *UpperConfidenceBound) Rewards() sam.SliceFloat64 {
-	u.Lock()
-	defer u.Unlock()
-
-	s := make(sam.SliceFloat64, len(u.R))
-	copy(s, u.R)
-	return s
 }
