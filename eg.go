@@ -103,6 +103,18 @@ func (e *EpsilonGreedy) Select() int {
 	return e.randSelect()
 }
 
+// Significant --
+func (e *EpsilonGreedy) Significant(pvalue float64) bool {
+	rewards, counts := make(sam.SliceFloat64, 0, 2), make(sam.SliceFloat64, 0, 2)
+	top2 := e.r.MaxNWithIndex(2)
+	for idx, score := range top2 {
+		rewards = append(rewards, score)
+		counts = append(counts, float64(e.c[idx]))
+	}
+
+	return significant(pvalue, rewards, counts)
+}
+
 func (e *EpsilonGreedy) randSelect() int {
 	res := rand.Intn(len(e.r))
 	if res < 0 {

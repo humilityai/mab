@@ -105,6 +105,18 @@ func (a *AnnealingSoftmax) Select() int {
 	return probs.BoundedSum(rand.Float64())
 }
 
+// Significant --
+func (a *AnnealingSoftmax) Significant(pvalue float64) bool {
+	rewards, counts := make(sam.SliceFloat64, 0, 2), make(sam.SliceFloat64, 0, 2)
+	top2 := a.r.MaxNWithIndex(2)
+	for idx, score := range top2 {
+		rewards = append(rewards, score)
+		counts = append(counts, float64(a.c[idx]))
+	}
+
+	return significant(pvalue, rewards, counts)
+}
+
 // Update should be used to increment the given option with
 // the given reward amount.
 func (a *AnnealingSoftmax) Update(option int, reward float64) error {

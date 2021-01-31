@@ -120,6 +120,18 @@ func (t *ThompsonSampling) Select() int {
 	return scores.MaxIndex()
 }
 
+// Significant --
+func (t *ThompsonSampling) Significant(pvalue float64) bool {
+	rewards, counts := make(sam.SliceFloat64, 0, 2), make(sam.SliceFloat64, 0, 2)
+	top2 := t.r.MaxNWithIndex(2)
+	for idx, score := range top2 {
+		rewards = append(rewards, score)
+		counts = append(counts, float64(t.c[idx]))
+	}
+
+	return significant(pvalue, rewards, counts)
+}
+
 // Update should be used to increment the given option with
 // the given reward amount.
 func (t *ThompsonSampling) Update(option int, reward float64) error {
